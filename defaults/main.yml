@@ -1,0 +1,12 @@
+---
+# defaults file for crowd
+
+crowd_version:   2.7.2
+crowd_baseurl:   http://www.atlassian.com/software/crowd/downloads/binary
+crowd_installer: atlassian-crowd-{{ crowd_version }}.tar.gz
+crowd_user:      crowd
+# use postgresql or mysql
+crowd_dbconnector: postgresql
+crowd_tmp:       /var/tmp
+crowd_installto: /opt
+crowd_datadir:   /srv/atlassian/crowd-data

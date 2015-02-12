@@ -1,0 +1,61 @@
+---
+# tasks file for crowd
+# vim: set ft=ansible ts=2 sw=2:
+
+- name: Check for OS support
+  fail: msg="OS is not supported"
+  when: ansible_os_family != 'RedHat'
+
+- name: Ensure group exists
+  group: name={{ crowd_user }} state=present
+
+- name: Ensure user exists
+  user: name={{ crowd_user }} group={{ crowd_user }} state=present
+
+- name: Fetch installer
+  get_url:
+    url={{ crowd_baseurl }}/{{ crowd_installer }}
+    dest={{ crowd_tmp }}/{{ crowd_installer }}
+  register: fetch
+  tags: install
+
+- name: Extract installation
+  shell: tar xvf {{ crowd_tmp }}/{{ crowd_installer }} -C {{ crowd_installto }} --transform='s#\(atlassian\)-#\1/#'
+  when: fetch.changed
+  tags: install
+
+- name: Ensure consistent file ownership
+  file: path={{ crowd_installto }}/atlassian/crowd-{{ crowd_version }} recurse=true
+        owner={{ crowd_user }} group={{ crowd_user }}
+
+- name: Ensure data dir exists
+  file: path={{ crowd_datadir }} state=directory
+        owner={{ crowd_user }} group={{ crowd_user }}
+
+- name: Set data dir in tomcat config
+  lineinfile:
+    dest={{ crowd_installto }}/atlassian/crowd-{{ crowd_version }}/crowd-webapp/WEB-INF/classes/crowd-init.properties
+    regexp="^crowd.home"
+    line="crowd.home={{ crowd_datadir }}"
+  tags: install
+
+- name: Ensure logs symlink exists
+  file: src={{ crowd_installto }}/atlassian/crowd-{{ crowd_version }}/apache-tomcat/logs
+        path=/var/log/crowd
+        state=link
+  tags: install
+
+- name: Ensure service definition exists
+  template: src=service.init.j2 dest=/etc/init.d/crowd
+            owner=root group=root mode=0755
+  tags: install
+
+- name: add proxy config to Tomcat settings
+  template: >
+    src=server.xml.j2 dest=/opt/atlassian/crowd-{{ crowd_version }}/apache-tomcat/conf/server.xml
+    owner={{ crowd_user }} group={{ crowd_user }} mode=0644
+  tags: install
+  when: crowd_proxy
+
+- name: Ensure service is set to run
+  service: name=crowd state=restarted enabled=yes
